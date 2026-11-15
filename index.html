@@ -1,34 +1,420 @@
-<!doctype html>
-<html lang="en" dir="ltr" class="dark">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#1C191D" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Manabrew" />
-    <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="/favicon.ico" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="icon" type="image/png" sizes="128x128" href="/favicon-128x128.png" />
-    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <title>Manabrew</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MTG Deckbuilder & Playtester</title>
     <style>
-      html {
-        background-color: #1c191d;
-        color-scheme: dark;
-      }
+        :root {
+            --bg-dark: #121212;
+            --bg-panel: #1e1e1e;
+            --bg-card: #2a2a2a;
+            --accent: #bb86fc;
+            --accent-hover: #9965f4;
+            --text-main: #e0e0e0;
+            --text-muted: #a0a0a0;
+            --border: #333333;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* Navigation */
+        header { background-color: var(--bg-panel); padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .nav-tabs { display: flex; gap: 10px; }
+        button { background-color: var(--bg-card); color: var(--text-main); border: 1px solid var(--border); padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: 0.2s; }
+        button:hover { background-color: #3a3a3a; }
+        button.active, button.primary { background-color: var(--accent); color: #000; border-color: var(--accent); }
+        button.primary:hover { background-color: var(--accent-hover); }
+
+        /* Views */
+        .view { display: none; flex: 1; overflow: hidden; }
+        .view.active { display: flex; }
+
+        /* Deckbuilder View */
+        .builder-left { width: 65%; padding: 20px; display: flex; flex-direction: column; border-right: 1px solid var(--border); }
+        .search-bar { display: flex; gap: 10px; margin-bottom: 15px; }
+        input, textarea { background-color: var(--bg-card); color: var(--text-main); border: 1px solid var(--border); padding: 10px; border-radius: 6px; flex: 1; }
+        .search-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; overflow-y: auto; padding-right: 5px; }
+        .card-item { position: relative; cursor: pointer; border-radius: 8px; overflow: hidden; transition: transform 0.15s; }
+        .card-item:hover { transform: scale(1.04); }
+        .card-item img { width: 100%; display: block; border-radius: 8px; }
+
+        .builder-right { width: 35%; padding: 20px; display: flex; flex-direction: column; background-color: var(--bg-panel); }
+        .deck-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .deck-list { flex: 1; overflow-y: auto; margin-bottom: 15px; border: 1px solid var(--border); border-radius: 6px; padding: 10px; background: var(--bg-dark); }
+        .deck-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--border); font-size: 14px; }
+        .deck-row:last-child { border-bottom: none; }
+        .deck-controls { display: flex; gap: 6px; }
+        .deck-controls button { padding: 2px 8px; font-size: 12px; }
+        .import-export { display: flex; gap: 8px; }
+
+        /* Playtester View */
+        #playtest-view { flex-direction: column; }
+        .play-toolbar { background-color: var(--bg-panel); padding: 10px 20px; border-bottom: 1px solid var(--border); display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+        .stat-box { background: var(--bg-card); padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+        .battlefield { flex: 1; position: relative; background: radial-gradient(circle, #1f2421 0%, #121212 100%); overflow: hidden; }
+        .hand-area { height: 190px; background-color: var(--bg-panel); border-top: 2px solid var(--border); display: flex; justify-content: center; align-items: center; gap: 10px; padding: 10px; overflow-x: auto; }
+
+        /* Playable Cards */
+        .play-card { width: 125px; border-radius: 7px; cursor: grab; user-select: none; box-shadow: 0 4px 10px rgba(0,0,0,0.6); transition: transform 0.15s; position: relative; }
+        .play-card img { width: 100%; border-radius: 7px; pointer-events: none; display: block; }
+        .bf-card { position: absolute; z-index: 10; }
+        .bf-card.tapped { transform: rotate(90deg); }
+        .hand-card:hover { transform: translateY(-15px) scale(1.1); z-index: 20; }
+
+        /* Card Preview Hover */
+        #card-preview { position: fixed; bottom: 210px; right: 20px; width: 240px; pointer-events: none; z-index: 100; display: none; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.8); }
+        #card-preview img { width: 100%; border-radius: 12px; }
     </style>
-  </head>
-  <body>
-    <div id="root"></div>
-    <!-- Runtime deploy config (relay endpoint). Must load before the app module;
-         a classic script runs during parse, ahead of the deferred module. -->
-    <script src="/config.js"></script>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+</head>
+<body>
+
+<header>
+    <h2>MTG Studio</h2>
+    <div class="nav-tabs">
+        <button id="tab-builder" class="active" onclick="switchView('builder')">Deckbuilder</button>
+        <button id="tab-playtest" onclick="switchView('playtest')">Playtester</button>
+    </div>
+</header>
+
+<!-- DECKBUILDER VIEW -->
+<div id="builder-view" class="view active">
+    <div class="builder-left">
+        <div class="search-bar">
+            <input type="text" id="search-input" placeholder="Search Scryfall (e.g. Lightning Bolt, t:creature c:red)..." onkeydown="if(event.key==='Enter') searchCards()">
+            <button class="primary" onclick="searchCards()">Search</button>
+        </div>
+        <div id="search-status" style="color: var(--text-muted); margin-bottom: 10px; font-size: 14px;">Search for cards to add them to your deck.</div>
+        <div class="search-results" id="search-results"></div>
+    </div>
+
+    <div class="builder-right">
+        <div class="deck-header">
+            <h3>Current Deck (<span id="deck-count">0</span>)</h3>
+            <button onclick="clearDeck()">Clear</button>
+        </div>
+        <div class="deck-list" id="deck-list"></div>
+        <div class="import-export">
+            <button onclick="openImportModal()" style="flex: 1;">Import Text</button>
+            <button onclick="exportDeck()" style="flex: 1;">Copy List</button>
+            <button class="primary" onclick="startPlaytest()" style="flex: 1;">Playtest</button>
+        </div>
+    </div>
+</div>
+
+<!-- PLAYTESTER VIEW -->
+<div id="playtest-view" class="view">
+    <div class="play-toolbar">
+        <button class="primary" onclick="startPlaytest()">New Game / Mulligan</button>
+        <button onclick="drawCard()">Draw Card</button>
+        <button onclick="untapAll()">Untap All</button>
+        <button onclick="shuffleLibrary()">Shuffle</button>
+        <div class="stat-box">
+            <span>Life: <strong id="life-total">20</strong></span>
+            <button onclick="changeLife(-1)">-</button>
+            <button onclick="changeLife(1)">+</button>
+        </div>
+        <div class="stat-box">Library: <strong id="lib-count">0</strong></div>
+        <div class="stat-box">Graveyard: <strong id="gy-count">0</strong></div>
+        <span style="font-size: 12px; color: var(--text-muted); margin-left: auto;">
+            Tip: Click hand card to play • Click battlefield card to tap • Double-click to send to graveyard
+        </span>
+    </div>
+
+    <div class="battlefield" id="battlefield"></div>
+    <div class="hand-area" id="hand-area"></div>
+</div>
+
+<!-- HOVER PREVIEW -->
+<div id="card-preview"><img id="preview-img" src="" alt="Card Preview"></div>
+
+<!-- IMPORT MODAL -->
+<div id="import-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:200; justify-content:center; align-items:center;">
+    <div style="background:var(--bg-panel); padding:20px; border-radius:8px; width:400px; display:flex; flex-direction:column; gap:10px; border:1px solid var(--border);">
+        <h3>Import Decklist</h3>
+        <p style="font-size:12px; color:var(--text-muted);">Format: 4 Lightning Bolt (one per line)</p>
+        <textarea id="import-text" rows="10" placeholder="4 Lightning Bolt&#10;20 Mountain"></textarea>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+            <button onclick="document.getElementById('import-modal').style.display='none'">Cancel</button>
+            <button class="primary" onclick="processImport()">Import Cards</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // State
+    let deck = JSON.parse(localStorage.getItem('mtg_deck')) || {};
+    let library = [];
+    let hand = [];
+    let graveyard = [];
+    let life = 20;
+    let zIndexCounter = 10;
+
+    // Navigation
+    function switchView(view) {
+        document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.nav-tabs button').forEach(el => el.classList.remove('active'));
+        document.getElementById(`${view}-view`).classList.add('active');
+        document.getElementById(`tab-${view}`).classList.add('active');
+    }
+
+    // Scryfall Search
+    async function searchCards() {
+        const query = document.getElementById('search-input').value.trim();
+        if (!query) return;
+        const status = document.getElementById('search-status');
+        const resultsDiv = document.getElementById('search-results');
+        
+        status.textContent = 'Searching Scryfall...';
+        resultsDiv.innerHTML = '';
+
+        try {
+            const res = await fetch(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}`);
+            const data = await res.json();
+            
+            if (data.object === 'error') {
+                status.textContent = data.details;
+                return;
+            }
+
+            status.textContent = `Showing ${Math.min(data.data.length, 40)} of ${data.total_cards} results (Click to add):`;
+            data.data.slice(0, 40).forEach(card => {
+                const imgUrl = getCardImage(card);
+                if (!imgUrl) return;
+
+                const div = document.createElement('div');
+                div.className = 'card-item';
+                div.innerHTML = `<img src="${imgUrl}" alt="${card.name}" loading="lazy">`;
+                div.onclick = () => addToDeck(card.name, imgUrl);
+                resultsDiv.appendChild(div);
+            });
+        } catch (err) {
+            status.textContent = 'Error fetching cards. Check connection.';
+        }
+    }
+
+    function getCardImage(card) {
+        if (card.image_uris && card.image_uris.normal) return card.image_uris.normal;
+        if (card.card_faces && card.card_faces[0].image_uris) return card.card_faces[0].image_uris.normal;
+        return null;
+    }
+
+    // Deck Management
+    function addToDeck(name, imgUrl, qty = 1) {
+        if (!deck[name]) deck[name] = { count: 0, img: imgUrl };
+        deck[name].count += qty;
+        saveAndRenderDeck();
+    }
+
+    function updateCount(name, delta) {
+        if (!deck[name]) return;
+        deck[name].count += delta;
+        if (deck[name].count <= 0) delete deck[name];
+        saveAndRenderDeck();
+    }
+
+    function clearDeck() {
+        if (confirm('Clear your entire deck?')) {
+            deck = {};
+            saveAndRenderDeck();
+        }
+    }
+
+    function saveAndRenderDeck() {
+        localStorage.setItem('mtg_deck', JSON.stringify(deck));
+        const listDiv = document.getElementById('deck-list');
+        listDiv.innerHTML = '';
+        let total = 0;
+
+        Object.keys(deck).sort().forEach(name => {
+            const item = deck[name];
+            total += item.count;
+            const row = document.createElement('div');
+            row.className = 'deck-row';
+            row.innerHTML = `
+                <span onmouseenter="showPreview('${item.img}')" onmouseleave="hidePreview()" style="cursor:pointer;">
+                    <strong>${item.count}x</strong> ${name}
+                </span>
+                <div class="deck-controls">
+                    <button onclick="updateCount('${name.replace(/'/g, "\\'")}', -1)">-</button>
+                    <button onclick="updateCount('${name.replace(/'/g, "\\'")}', 1)">+</button>
+                </div>
+            `;
+            listDiv.appendChild(row);
+        });
+        document.getElementById('deck-count').textContent = total;
+    }
+
+    // Import / Export
+    function openImportModal() {
+        document.getElementById('import-modal').style.display = 'flex';
+    }
+
+    async function processImport() {
+        const lines = document.getElementById('import-text').value.split('\n');
+        document.getElementById('import-modal').style.display = 'none';
+        const status = document.getElementById('search-status');
+        status.textContent = 'Importing decklist...';
+
+        for (let line of lines) {
+            line = line.trim();
+            if (!line) continue;
+            const match = line.match(/^(\d+)x?\s+(.+)$/i);
+            const qty = match ? parseInt(match[1]) : 1;
+            const name = match ? match[2] : line;
+
+            try {
+                const res = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
+                const card = await res.json();
+                if (card.object !== 'error') {
+                    addToDeck(card.name, getCardImage(card), qty);
+                }
+                await new Promise(r => setTimeout(r, 75)); // Respect Scryfall rate limit
+            } catch (e) { console.error(e); }
+        }
+        status.textContent = 'Import complete!';
+    }
+
+    function exportDeck() {
+        const text = Object.entries(deck).map(([name, data]) => `${data.count} ${name}`).join('\n');
+        navigator.clipboard.writeText(text);
+        alert('Decklist copied to clipboard!');
+    }
+
+    // Playtester Logic
+    function startPlaytest() {
+        if (Object.keys(deck).length === 0) {
+            alert('Add cards to your deck first!');
+            return;
+        }
+        switchView('playtest');
+        library = [];
+        hand = [];
+        graveyard = [];
+        life = 20;
+        document.getElementById('battlefield').innerHTML = '';
+
+        Object.entries(deck).forEach(([name, data]) => {
+            for (let i = 0; i < data.count; i++) {
+                library.push({ name, img: data.img });
+            }
+        });
+
+        shuffleLibrary();
+        for (let i = 0; i < 7; i++) drawCard();
+        updatePlayStats();
+    }
+
+    function shuffleLibrary() {
+        for (let i = library.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [library[i], library[j]] = [library[j], library[i]];
+        }
+    }
+
+    function drawCard() {
+        if (library.length === 0) return;
+        hand.push(library.pop());
+        renderHand();
+        updatePlayStats();
+    }
+
+    function renderHand() {
+        const handDiv = document.getElementById('hand-area');
+        handDiv.innerHTML = '';
+        hand.forEach((card, index) => {
+            const div = document.createElement('div');
+            div.className = 'play-card hand-card';
+            div.innerHTML = `<img src="${card.img}" alt="${card.name}">`;
+            div.onmouseenter = () => showPreview(card.img);
+            div.onmouseleave = hidePreview;
+            div.onclick = () => playFromHand(index);
+            handDiv.appendChild(div);
+        });
+    }
+
+    function playFromHand(index) {
+        const card = hand.splice(index, 1)[0];
+        renderHand();
+        spawnOnBattlefield(card);
+        hidePreview();
+    }
+
+    function spawnOnBattlefield(card) {
+        const bf = document.getElementById('battlefield');
+        const div = document.createElement('div');
+        div.className = 'play-card bf-card';
+        div.style.left = `${100 + Math.random() * 200}px`;
+        div.style.top = `${80 + Math.random() * 120}px`;
+        div.style.zIndex = ++zIndexCounter;
+        div.innerHTML = `<img src="${card.img}" alt="${card.name}">`;
+
+        // Dragging & Clicking
+        let isDragging = false, startX, startY, origX, origY;
+
+        div.onmousedown = (e) => {
+            isDragging = false;
+            startX = e.clientX;
+            startY = e.clientY;
+            origX = div.offsetLeft;
+            origY = div.offsetTop;
+            div.style.zIndex = ++zIndexCounter;
+
+            document.onmousemove = (moveEvent) => {
+                const dx = moveEvent.clientX - startX;
+                const dy = moveEvent.clientY - startY;
+                if (Math.abs(dx) > 4 || Math.abs(dy) > 4) isDragging = true;
+                div.style.left = `${origX + dx}px`;
+                div.style.top = `${origY + dy}px`;
+            };
+
+            document.onmouseup = () => {
+                document.onmousemove = null;
+                document.onmouseup = null;
+                if (!isDragging) div.classList.toggle('tapped');
+            };
+        };
+
+        div.ondblclick = () => {
+            div.remove();
+            graveyard.push(card);
+            updatePlayStats();
+        };
+
+        div.onmouseenter = () => showPreview(card.img);
+        div.onmouseleave = hidePreview;
+
+        bf.appendChild(div);
+    }
+
+    function untapAll() {
+        document.querySelectorAll('.bf-card').forEach(c => c.classList.remove('tapped'));
+    }
+
+    function changeLife(delta) {
+        life += delta;
+        updatePlayStats();
+    }
+
+    function updatePlayStats() {
+        document.getElementById('life-total').textContent = life;
+        document.getElementById('lib-count').textContent = library.length;
+        document.getElementById('gy-count').textContent = graveyard.length;
+    }
+
+    // Hover Preview
+    function showPreview(imgUrl) {
+        const preview = document.getElementById('card-preview');
+        document.getElementById('preview-img').src = imgUrl;
+        preview.style.display = 'block';
+    }
+    function hidePreview() {
+        document.getElementById('card-preview').style.display = 'none';
+    }
+
+    // Init
+    saveAndRenderDeck();
+</script>
+</body>
 </html>
